@@ -1,16 +1,124 @@
-var app = require('express')();
-var http = require('http').createServer(app);
-var io = require('socket.io')(http);
+const app = require('express')();
+const http = require('http').createServer(app);
+const io = require('socket.io')(http);
+const Rx = require('rx');
 
 const MAX_PU = 2;           // maximum 2 power ups at a time
 const PU_INT = 15;          // 15 seconds regeneration interval
+const PLAYER_RADIUS = 20;
 
 var powerUpCounter = 0;
 var connectCounter = 0;
-var allClients = [];
-var clientIds = [];
+
+var sockets = {};           // socket list {}
+var players = {};           // player list {}
+
 var powerUps = [];
 var id;
+
+http.listen(3000, () => {
+    console.log('listening on *:3000');
+});
+
+const connection = Rx.Observable.fromEvent(io, 'connection');
+
+// broadcast to all clients: players and power up information
+connection.subscribe(socket => {
+    Rx
+    .Observable
+    .fromEvent(socket, 'data')
+    .subscribe(data => {
+        //io.emit('data', data);  // Emit to all clients
+        io.emit('powers', powerUps);
+        io.emit('users', players);
+    });
+});
+
+// save all clients information in a list
+connection.subscribe(socket => {
+    Rx
+    .Observable
+    .fromEvent(socket, 'data')
+    .subscribe(data => {
+        players[socket.id] = data;
+    });
+});
+
+
+// broadcast to all clients: client who picked up power up
+connection.subscribe(socket => {
+    Rx
+    .Observable
+    .fromEvent(socket, 'data')
+    .subscribe(data => {
+        for (var pu in powerUps) {
+            var cx = data.x;
+            var cy = data.y;
+            const dx = powerUps[pu].x - cx;
+            const dy = powerUps[pu].y - cy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < PLAYER_RADIUS * data.scale + PLAYER_RADIUS) {     // hit
+                console.log('Consumed a power up ' + powerUps[pu].type);
+                io.emit('consume', {
+                    id: data.id,
+                    type: powerUps[pu].type
+                });
+                powerUps.splice(pu, 1);
+                powerUpCounter--;
+                // send message the client who hits it
+                break;
+            }
+        }
+    });
+});
+
+// broadcast to all clients: client who touched by others
+connection.subscribe(socket => {
+    Rx
+    .Observable
+    .fromEvent(socket, 'data')
+    .subscribe(data => {
+        var cx = data.x;
+        var cy = data.y;
+        for (var key in players) {
+            const dx = players[key].x - cx;
+            const dy = players[key].y - cy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < PLAYER_RADIUS * (data.scale + players[key].scale) && data.id !== players[key].id) {     // hit
+                //console.log('players collision!');
+                io.emit('collision', {
+                    first: data.id,
+                    firstRole: data.role,
+                    firstStatus: data.status,
+                    second: players[key].id,
+                    secondRole: players[key].role,
+                    secondStatus: players[key].status
+                });
+                break;
+            }
+        }
+    });
+});
+
+
+io.sockets.on('connection', function(socket) {
+    // connecting
+    sockets[socket.id] = socket;
+    
+    connectCounter++;
+    console.log('Client connected');
+    console.log('Total connected users: ' + connectCounter);
+
+    // disconnecting
+    socket.on('disconnect', function() {
+        connectCounter--;
+        console.log('Client disconnected');
+        console.log('Total connected users: ' + connectCounter);
+
+        delete sockets[socket.id];
+        delete players[socket.id];
+   });
+});
 
 class PowerUp {
     constructor(type, x, y) {
@@ -26,8 +134,8 @@ setInterval(generatePowerUp, PU_INT * 1000);
 function generatePowerUp() {
     if (powerUpCounter < MAX_PU) {
         var t = Math.floor(Math.random() * 2);      // 0 or 1
-        var puX = Math.floor(Math.random() * 1600) + 200;
-        var puY = Math.floor(Math.random() * 1600) + 200;
+        var puX = Math.floor(Math.random() * 600) + 200;
+        var puY = Math.floor(Math.random() * 600) + 200;
         var powerUp;
         if (t) {           // power up 1
             powerUp = new PowerUp(1, puX, puY);
@@ -36,37 +144,13 @@ function generatePowerUp() {
         }
         powerUpCounter++;
         powerUps.push(powerUp);
+        console.log('Generated a power up ' + t);
     }
 }
 
-http.listen(3000, () => {
-    console.log('listening on *:3000');
-});
 
-io.sockets.on('connection', function(socket) {
-    allClients.push(socket);
-    
-    connectCounter++;
-    console.log('new user connected');
-    console.log('total connected users: ' + connectCounter);
-    socket.on('data', (msg) => {
-        io.emit('data', msg);
-        id = msg.id;
-        io.emit('users', clientIds);
-        io.emit('powers', powerUps);
-    });
-    clientIds.push(id);
 
-    socket.on('disconnect', function() {
-        connectCounter--;
-        console.log('user disconnected');
-        console.log('total connected users: ' + connectCounter);
 
-        var i = allClients.indexOf(socket);
-        allClients.splice(i, 1);
-        clientIds.splice(i, 1);
-   });
-});
 
 const { networkInterfaces } = require('os');
 

@@ -29,7 +29,7 @@
             * Disables use of inline scripts in order to mitigate risk of XSS vulnerabilities. To change this:
                 * Enable inline JS: add 'unsafe-inline' to default-src
         -->
-        <meta http-equiv="Content-Security-Policy" content="default-src https://cdnjs.cloudflare.com http://localhost:3000 http://192.168.10.24:3000 http://10.0.2.2:3000 ws://localhost:3000 'self' data: gap: https://ssl.gstatic.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src *; img-src 'self' data: content:;">
+        <meta http-equiv="Content-Security-Policy" content="default-src https://cdnjs.cloudflare.com http://localhost:3000 http://192.168.10.24:3000 http://10.0.2.2:3000 ws://localhost:3000 ws://192.168.10.24:3000 ws://10.0.2.2:3000 'self' data: gap: https://ssl.gstatic.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src *; img-src 'self' data: content:;">
         <meta name="format-detection" content="telephone=no">
         <meta name="msapplication-tap-highlight" content="no">
         <meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
@@ -49,7 +49,14 @@
         <canvas class="canvas" id="game-canvas"></canvas>
 
         <div class="app" id="play-menu">
-            <input type="text" id="username-input" placeholder="Username" />
+            
+            
+            <label for="roles">Choose your role:</label>
+            <select name="roles" id="userrole-input">
+                <option value="it">It</option>
+                <option value="notIt">Not It</option>
+            </select>
+            
             <button id="play-button">PLAY</button>
         </div>
         
